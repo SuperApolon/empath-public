@@ -36,7 +36,7 @@ async function drawAvatar(ctx, p, x, y, w, h) {
 function commit(cv, off) { cv.width = cv.height = CANVAS; cv.getContext('2d').drawImage(off, 0, 0); }
 const offscreen = () => { const c = document.createElement('canvas'); c.width = c.height = CANVAS; return c; };
 export async function drawCard(cv, p) { const off = offscreen(); await drawCardTo(off, p); commit(cv, off); }
-export async function drawGroup(cv, people, ev) { const off = offscreen(); await drawGroupTo(off, people, ev); commit(cv, off); }
+export async function drawGroup(cv, people, ev) { const off = offscreen(); await drawGroupTo(off, people, ev); commit(cv, off); cv.dataset.bg = off.dataset.bg; }
 async function drawCardTo(cv, p) {
   const ctx = cv.getContext('2d');
   ctx.drawImage(await load(CARD.bg), 0, 0, CANVAS, CANVAS);
@@ -45,12 +45,17 @@ async function drawCardTo(cv, p) {
   ctx.fillStyle = '#1c2340'; ctx.font = '600 52px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(`「${p.name}」`, n.x + n.w / 2, n.y + n.h / 2 + 2);
 }
+// 抽選ごとに背景3種からランダムに1枚（同じ背景の連続は避ける）
+let lastBg = null;
+export function pickGroupBg(list = GROUP.bgs) {
+  const pool = list.length > 1 ? list.filter(b => b !== lastBg) : list;
+  lastBg = pool[Math.floor(Math.random() * pool.length)]; return lastBg;
+}
 async function drawGroupTo(cv, people, ev) {
   const ctx = cv.getContext('2d');
-  ctx.drawImage(await load(GROUP.bg), 0, 0, CANVAS, CANVAS);
+  const bg = pickGroupBg(); cv.dataset.bg = bg;
+  ctx.drawImage(await load(bg), 0, 0, CANVAS, CANVAS);
   const ph = GROUP.photo; ctx.save(); rr(ctx, ph.x, ph.y, ph.w, ph.h, ph.r); ctx.clip();
-  const sky = ctx.createLinearGradient(0, ph.y, 0, ph.y + ph.h); sky.addColorStop(0, '#bcd6f5'); sky.addColorStop(1, '#fbe3d0');
-  ctx.fillStyle = sky; ctx.fillRect(ph.x, ph.y, ph.w, ph.h);
   for (const [i, [cx, cy, r]] of GROUP.layouts[people.length].entries()) {
     ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
     await drawAvatar(ctx, people[i], cx - r, cy - r, r * 2, r * 2); ctx.restore();
@@ -58,7 +63,8 @@ async function drawGroupTo(cv, people, ev) {
     ctx.fillStyle = '#1c2340'; ctx.font = '500 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(people[i].name, cx, cy + r + 36);
   }
   ctx.restore();
-  const c = GROUP.caption; ctx.fillStyle = 'rgba(250,248,255,.96)'; ctx.fillRect(c.x, c.y, c.w, c.h);
+  // 背景画像の帯にはサンプル文言が焼き込まれているので、帯を不透明に塗ってから描く
+  const c = GROUP.caption; ctx.fillStyle = '#faf8ff'; rr(ctx, c.x, c.y, c.w, c.h, c.r); ctx.fill();
   ctx.fillStyle = '#1c2340'; ctx.textAlign = 'center'; ctx.font = '500 30px serif';
   ctx.fillText(`「${caption(people.map(p => p.name), ev)}」`, CANVAS / 2, c.y + 48, c.w - 30);
   ctx.font = '500 24px sans-serif'; ctx.fillText(TAGS.join(' '), CANVAS / 2, c.y + 98);

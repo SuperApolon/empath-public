@@ -7,8 +7,10 @@ export const CARD = {
 };
 export const GROUP = {
   bg: 'art/group-photo-5.jpg',
+  // 集合写真の背景候補（アリス納品・抽選ごとにランダム）。写真窓は空/光/桜のみ
+  bgs: ['art/group-bg-01-sakura-sky.jpg', 'art/group-bg-02-golden-hour.jpg', 'art/group-bg-03-petal-storm.jpg'],
   photo:   { x: 70, y: 138, w: 885, h: 700, r: 18 },   // 写真窓（ここを塗り直す）
-  caption: { x: 60, y: 850, w: 904, h: 120 },          // キャプション＋タグ帯
+  caption: { x: 52, y: 848, w: 920, h: 136, r: 18 },          // キャプション＋タグ帯
   // 人数ごとの円スロット（cx, cy, r）。見本の5人の顔位置に準拠
   layouts: {
     2: [[360, 470, 170], [664, 470, 170]],
