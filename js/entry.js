@@ -1,5 +1,5 @@
 // プロトB：入場（ポストURL）・ローカルプール・抽選ルール
-export const KEYS = { pool: 'empath.pool.v1', me: 'empath.me.v1', hist: 'empath.drawHistory.v1', demo: 'empath.demoPool.v1' };
+export const KEYS = { pool: 'empath.pool.v1', me: 'empath.me.v1', hist: 'empath.drawHistory.v1', demo: 'empath.demoPool.v2' };
 export const COOLDOWN_MS = 60 * 60 * 1000;   // 再抽選クールダウン60分
 export const RECENT_EXCLUDE = 3;              // 直近3回に出た相手は除外
 export const MAX_OTHERS = 4;                  // 自分＋最大4
@@ -17,7 +17,7 @@ const set = (k, v) => st().setItem(k, JSON.stringify(v));
 
 export const loadPool = () => get(KEYS.pool, []);
 export const getMe = () => get(KEYS.me, null);
-export const demoOn = () => get(KEYS.demo, true);
+export const demoOn = () => get(KEYS.demo, false);
 export const setDemo = v => set(KEYS.demo, !!v);
 export const loadHistory = () => get(KEYS.hist, []);
 

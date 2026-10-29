@@ -3,13 +3,20 @@ import * as E from './entry.js';
 export const TAGS = ['#EMPATH', '#共鳴'];
 export const ENTRY_PHRASE = 'EMPATHはじめる。';
 const DEFAULT_EVENT = '言えなかった夜の話';
+// 初期プール：ORRERY QUBIT 19名。canvas合成は raw/（枠なし）を使う＝二重枠防止
+export const ORRERY = [
+  ['setsuna', 'セツナ'], ['toua', 'トワ'], ['alice', 'アリス'], ['cloud', 'クラウド'], ['zex', 'ゼクス'],
+  ['lux', 'ルクス'], ['featherio', 'フェザリオ'], ['mira', 'ミラ'], ['signa', 'シグナ'], ['sona', 'ソナ'],
+  ['toria', 'トリア'], ['kanata', 'カナタ'], ['tetra', 'テトラ'], ['harbor', 'ハーバー'], ['super_apollon', '超アポロン'],
+  ['choco', 'チョコ'], ['shiori', 'シオリ'], ['wizcraft', 'Wizcraft'], ['mouse', 'マウス'],
+].map(([slug, name]) => ({ id: 'orrery:' + slug, slug, name, img: `art/pool/raw/${slug}.jpg`, card: `art/pool/cards/card-${slug}.jpg`, orrery: true }));
+// デモ用ダミー：「デモ用ダミープールも含める」ON のときだけ追加
 const DUMMY = [
-  { name: 'セツナ', img: 'art/setsuna-portrait-v1.jpg' },
   { name: 'ミナト', img: 'art/avatar-diversity-02-ash-blond-masc.jpg' },
   { name: 'ヒカリ', img: 'art/avatar-diversity-01-warm-brunette.jpg' },
   { name: 'ソラ', img: 'art/avatar-diversity-04-black-hair-masc.jpg' },
   { name: 'ユイ', img: 'art/avatar-diversity-03-lavender.jpg' },
-  { name: 'カナタ', img: 'art/profile-avatar.jpg' },
+  { name: 'ハルカ', img: 'art/profile-avatar.jpg' },
   { name: 'アオ', color: '#7fa6c9' },
 ].map((p, i) => ({ ...p, id: 'dummy:' + i, dummy: true }));
 const COLORS = ['#7fa6c9', '#c99a7f', '#9ac97f', '#b07fc9', '#c97f9e'];
@@ -76,20 +83,20 @@ export function intentUrl(text) {
 if (typeof document !== 'undefined' && document.getElementById('pool')) {
   const $ = id => document.getElementById(id);
   const fmt = ms => `${Math.ceil(ms / 60000)}分`;
-  // プール = 入場済み（localStorage）＋（トグルONなら）ダミー
+  // プール = ORRERY 19名＋入場済み（localStorage）＋（トグルONなら）ダミー
   function buildPool() {
     const entered = E.loadPool().map((e, i) => ({ ...e, name: e.displayName, color: COLORS[i % COLORS.length] }));
     const meId = E.getMe();
-    let me = entered.find(e => e.id === meId) ?? DUMMY[0];
+    let me = entered.find(e => e.id === meId) ?? ORRERY[0];
     if (customImg) me = { ...me, img: customImg };
-    const others = [...entered.filter(e => e.id !== me.id), ...(E.demoOn() ? DUMMY.filter(d => d.id !== me.id) : [])];
+    const others = [...ORRERY.filter(o => o.id !== me.id), ...entered.filter(e => e.id !== me.id), ...(E.demoOn() ? DUMMY.filter(d => d.id !== me.id) : [])];
     return { me, others };
   }
   let picked = [], customImg = null, cardReady = Promise.resolve(), groupReady = Promise.resolve();
   const cardText = me => `${ENTRY_PHRASE}\n「${me.name}」のプロフィールカード`;
   function renderPool() {
     const { me, others } = buildPool();
-    $('me').textContent = me.dummy ? `${me.name}（デモ・未入場）` : `${me.name}${me.hasCard ? ' ★優先' : ''}`;
+    $('me').textContent = me.orrery || me.dummy ? `${me.name}（初期プール・未入場）` : `${me.name}${me.hasCard ? ' ★優先' : ''}`;
     const ul = $('pool'); ul.innerHTML = '';
     for (const p of others) {
       const li = document.createElement('li');
