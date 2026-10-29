@@ -32,16 +32,21 @@ async function drawAvatar(ctx, p, x, y, w, h) {
   ctx.fillStyle = 'rgba(30,40,80,.75)'; ctx.font = `600 ${h * .38}px sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.name[0], x + w / 2, y + h / 2);
 }
-export async function drawCard(cv, p) {
-  const ctx = cv.getContext('2d'); cv.width = cv.height = CANVAS;
+// 非同期描画中に別描画が走ると表示キャンバスが途中状態になる→オフスクリーンで描いてから一括反映
+function commit(cv, off) { cv.width = cv.height = CANVAS; cv.getContext('2d').drawImage(off, 0, 0); }
+const offscreen = () => { const c = document.createElement('canvas'); c.width = c.height = CANVAS; return c; };
+export async function drawCard(cv, p) { const off = offscreen(); await drawCardTo(off, p); commit(cv, off); }
+export async function drawGroup(cv, people, ev) { const off = offscreen(); await drawGroupTo(off, people, ev); commit(cv, off); }
+async function drawCardTo(cv, p) {
+  const ctx = cv.getContext('2d');
   ctx.drawImage(await load(CARD.bg), 0, 0, CANVAS, CANVAS);
   const a = CARD.avatar; ctx.save(); rr(ctx, a.x, a.y, a.w, a.h, a.r); ctx.clip(); await drawAvatar(ctx, p, a.x, a.y, a.w, a.h); ctx.restore();
   const n = CARD.name; ctx.fillStyle = 'rgba(248,246,255,.97)'; rr(ctx, n.x, n.y, n.w, n.h, n.r); ctx.fill();
   ctx.fillStyle = '#1c2340'; ctx.font = '600 52px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(`「${p.name}」`, n.x + n.w / 2, n.y + n.h / 2 + 2);
 }
-export async function drawGroup(cv, people, ev) {
-  const ctx = cv.getContext('2d'); cv.width = cv.height = CANVAS;
+async function drawGroupTo(cv, people, ev) {
+  const ctx = cv.getContext('2d');
   ctx.drawImage(await load(GROUP.bg), 0, 0, CANVAS, CANVAS);
   const ph = GROUP.photo; ctx.save(); rr(ctx, ph.x, ph.y, ph.w, ph.h, ph.r); ctx.clip();
   const sky = ctx.createLinearGradient(0, ph.y, 0, ph.y + ph.h); sky.addColorStop(0, '#bcd6f5'); sky.addColorStop(1, '#fbe3d0');
@@ -74,7 +79,8 @@ if (typeof document !== 'undefined' && document.getElementById('pool')) {
     const others = [...entered.filter(e => e.id !== me.id), ...(E.demoOn() ? DUMMY.filter(d => d.id !== me.id) : [])];
     return { me, others };
   }
-  let picked = [], customImg = null;
+  let picked = [], customImg = null, cardReady = Promise.resolve(), groupReady = Promise.resolve();
+  const cardText = me => `${ENTRY_PHRASE}\n「${me.name}」のプロフィールカード`;
   function renderPool() {
     const { me, others } = buildPool();
     $('me').textContent = me.dummy ? `${me.name}（デモ・未入場）` : `${me.name}${me.hasCard ? ' ★優先' : ''}`;
@@ -86,7 +92,8 @@ if (typeof document !== 'undefined' && document.getElementById('pool')) {
       if (!p.dummy) { const b = document.createElement('button'); b.textContent = '削除'; b.onclick = () => { E.removeEntry(p.id); renderPool(); }; li.append(' ', b); }
       ul.append(li);
     }
-    drawCard($('card'), me);
+    cardReady = drawCard($('card'), me).catch(err => { console.error(err); });
+    $('postCard').href = intentUrl(cardText(me));
     const w = E.cooldownLeft(); $('cd').textContent = w ? `次の抽選まで あと${fmt(w)}` : '抽選できます';
     $('shuffle').disabled = w > 0 && !$('demoFree').checked;
     if ($('demoFree').checked) $('cd').textContent = 'デモモード：何度でも抽選できます';
@@ -124,12 +131,27 @@ if (typeof document !== 'undefined' && document.getElementById('pool')) {
     $('picked').textContent = picked.map(p => p.name).join('・') || '—';
     if (people.length < 2) { $('cap').textContent = '「ランダム接続」で相手を引いてください'; $('post').removeAttribute('href'); return; }
     const ev = $('event').value.trim() || DEFAULT_EVENT;
-    await drawGroup($('group'), people, ev);
+    groupReady = drawGroup($('group'), people, ev); await groupReady;
     const t = caption(people.map(p => p.name), ev);
     $('cap').textContent = t; $('post').href = intentUrl(t);
   }
-  const dl = (id, name) => () => { const a = document.createElement('a'); a.download = name; a.href = $(id).toDataURL('image/png'); a.click(); };
-  $('dlCard').onclick = dl('card', 'empath-card.png'); $('dlGroup').onclick = dl('group', 'empath-group.png');
+  // PNG保存: 描画完了を待ち、toBlob→ObjectURL、<a>をDOMに追加してクリック（Firefox/大容量dataURL対策）
+  const dl = (id, name, ready, msgId) => async () => {
+    const say = t => { $(msgId).textContent = t; };
+    try {
+      await ready();
+      const blob = await new Promise((ok, ng) => $(id).toBlob(b => b ? ok(b) : ng(new Error('画像を作れませんでした')), 'image/png'));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = name; a.rel = 'noopener';
+      document.body.append(a); a.click(); a.remove();
+      // iOS Safari等 download属性非対応なら新しいタブで開いて長押し保存
+      if (!('download' in HTMLAnchorElement.prototype)) window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      say('PNGを保存しました（保存されない端末は画像を長押し）');
+    } catch (err) { console.error(err); say('PNG保存に失敗：' + (err.name === 'SecurityError' ? 'ページを http(s) で開いてください' : err.message)); }
+  };
+  $('dlCard').onclick = dl('card', 'empath-card.png', () => cardReady, 'dlCardMsg');
+  $('dlGroup').onclick = dl('group', 'empath-group.png', () => groupReady, 'dlGroupMsg');
   setInterval(() => { const w = E.cooldownLeft(); if (w) $('cd').textContent = `次の抽選まで あと${fmt(w)}`; else if ($('shuffle').disabled) renderPool(); }, 30000);
   renderPool(); render();
 }

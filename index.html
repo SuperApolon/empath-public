@@ -24,7 +24,8 @@
 <p><label><input type="checkbox" id="hasCard"> カード画像を添付した（優先）</label></p>
 <p><button id="enter">プールに入る</button> <span id="msg"></span></p></section>
 <section><h2>プロフィールカード</h2><p>自分：<b id="me"></b></p><canvas id="card"></canvas>
-<p><button id="dlCard">PNG保存</button></p></section>
+<p><button id="dlCard">PNG保存</button> <a id="postCard" target="_blank" rel="noopener">Xにプロフィールをポストする文面を開く</a> <span id="dlCardMsg" class="note"></span></p>
+<p class="note">カード画像は「PNG保存」してから、投稿画面で手動添付してください。自動投稿はしません。</p></section>
 <section><h2>2. プール</h2>
 <p><label><input type="checkbox" id="demo"> デモ用ダミープールも含める</label></p><ul id="pool"></ul></section>
 <section><h2>3. ランダム接続 <span id="count"></span></h2>
@@ -32,6 +33,6 @@
 <p><button id="shuffle">ランダム接続</button> <span id="cd"></span></p><p>相手：<span id="picked"></span></p>
 <p><label>できごと：<input id="event"></label></p>
 <canvas id="group"></canvas><p id="cap"></p>
-<p><button id="dlGroup">PNG保存</button> <a id="post" target="_blank" rel="noopener">Xに投稿する文面を開く</a></p>
+<p><button id="dlGroup">PNG保存</button> <a id="post" target="_blank" rel="noopener">Xに投稿する文面を開く</a> <span id="dlGroupMsg" class="note"></span></p>
 <p class="note">画像はブラウザ内で合成。自動投稿はしません。プールはこの端末の localStorage のみ（共有は後段）。</p></section>
 <script type="module" src="js/main.js"></script></body></html>
