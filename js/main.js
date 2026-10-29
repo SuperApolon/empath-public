@@ -19,6 +19,7 @@ const DUMMY = [
   { name: 'ハルカ', img: 'art/profile-avatar.jpg' },
   { name: 'アオ' }, // img なし→テンプレ割り当て
 ].map((p, i) => ({ ...p, id: 'dummy:' + i, dummy: true }));
+// 旧：自動キャプション（プレイヤー合成では使わない・互換のため残す）
 export function caption(names, ev = DEFAULT_EVENT) {
   const others = names.slice(1);
   if (others.length === 0) return '';
@@ -47,7 +48,7 @@ async function drawAvatar(ctx, p, x, y, w, h) {
 function commit(cv, off) { cv.width = cv.height = CANVAS; cv.getContext('2d').drawImage(off, 0, 0); }
 const offscreen = () => { const c = document.createElement('canvas'); c.width = c.height = CANVAS; return c; };
 export async function drawCard(cv, p) { const off = offscreen(); await drawCardTo(off, p); commit(cv, off); }
-export async function drawGroup(cv, people, ev) { const off = offscreen(); await drawGroupTo(off, people, ev); commit(cv, off); cv.dataset.bg = off.dataset.bg; }
+export async function drawGroup(cv, people, opt = {}) { const off = offscreen(); await drawGroupTo(off, people, opt); commit(cv, off); cv.dataset.bg = off.dataset.bg; }
 async function drawCardTo(cv, p) {
   const ctx = cv.getContext('2d');
   ctx.drawImage(await load(CARD.bg), 0, 0, CANVAS, CANVAS);
@@ -56,29 +57,47 @@ async function drawCardTo(cv, p) {
   ctx.fillStyle = '#1c2340'; ctx.font = '600 52px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(`「${p.name}」`, n.x + n.w / 2, n.y + n.h / 2 + 2);
 }
-// 抽選ごとに背景候補（9種）からランダムに1枚（同じ背景の連続は避ける）
+// 旧：抽選ごとに背景をランダム選択（プレイヤー導線では使わない・互換のため残す）
 let lastBg = null;
 export function pickGroupBg(list = GROUP.bgs) {
   const pool = list.length > 1 ? list.filter(b => b !== lastBg) : list;
   lastBg = pool[Math.floor(Math.random() * pool.length)]; return lastBg;
 }
-async function drawGroupTo(cv, people, ev) {
+// 文言を帯幅で折り返し（最大 maxLines 行、超過は…）
+export function wrapLines(ctx, text, maxW, maxLines = 2) {
+  const out = [];
+  for (const para of String(text).split('\n')) {
+    let line = '';
+    for (const ch of para) { if (ctx.measureText(line + ch).width > maxW && line) { out.push(line); line = ch; } else line += ch; }
+    out.push(line);
+  }
+  const lines = out.filter((l, i) => l || i === 0);
+  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] = lines[maxLines - 1].slice(0, -1) + '…'; }
+  return lines;
+}
+/** opt.bg：プレイヤーが選んだ背景（未指定なら先頭テンプレ）／opt.text：プレイヤー入力の全文（自動文は使わない） */
+async function drawGroupTo(cv, people, { bg = GROUP.templates[0].src, text = '' } = {}) {
   const ctx = cv.getContext('2d');
-  const bg = pickGroupBg(); cv.dataset.bg = bg;
+  cv.dataset.bg = bg;
   ctx.drawImage(await load(bg), 0, 0, CANVAS, CANVAS);
   const ph = GROUP.photo; ctx.save(); rr(ctx, ph.x, ph.y, ph.w, ph.h, ph.r); ctx.clip();
+  const small = people.length >= 6;
   for (const [i, [cx, cy, r]] of GROUP.layouts[people.length].entries()) {
     ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
     await drawAvatar(ctx, people[i], cx - r, cy - r, r * 2, r * 2); ctx.restore();
     ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = '#1c2340'; ctx.font = '500 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(people[i].name, cx, cy + r + 36);
+    ctx.fillStyle = '#1c2340'; ctx.font = `500 ${small ? 24 : 28}px sans-serif`; ctx.textAlign = 'center';
+    // 暗い背景でも読めるよう白フチを付ける
+    ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(255,255,255,.92)';
+    ctx.strokeText(people[i].name, cx, cy + r + 34, r * 2 + 30); ctx.fillText(people[i].name, cx, cy + r + 34, r * 2 + 30);
   }
   ctx.restore();
   // 背景画像の帯にはサンプル文言が焼き込まれているので、帯を不透明に塗ってから描く
   const c = GROUP.caption; ctx.fillStyle = '#faf8ff'; rr(ctx, c.x, c.y, c.w, c.h, c.r); ctx.fill();
-  ctx.fillStyle = '#1c2340'; ctx.textAlign = 'center'; ctx.font = '500 30px serif';
-  ctx.fillText(`「${caption(people.map(p => p.name), ev)}」`, CANVAS / 2, c.y + 48, c.w - 30);
-  ctx.font = '500 24px sans-serif'; ctx.fillText(TAGS.join(' '), CANVAS / 2, c.y + 98);
+  ctx.fillStyle = '#1c2340'; ctx.textAlign = 'center'; ctx.font = '500 28px serif';
+  const lines = text.trim() ? wrapLines(ctx, text.trim(), c.w - 40, 2) : [];
+  lines.forEach((l, i) => ctx.fillText(l, CANVAS / 2, c.y + (lines.length === 1 ? 52 : 38 + i * 34)));
+  ctx.font = '500 24px sans-serif'; ctx.fillText(TAGS.join(' '), CANVAS / 2, c.y + 112);
 }
 export function intentUrl(text) {
   return 'https://x.com/intent/post?text=' + encodeURIComponent(`${text}\n${TAGS.join(' ')}`);
@@ -86,71 +105,96 @@ export function intentUrl(text) {
 // ---- UI ----
 if (typeof document !== 'undefined' && document.getElementById('pool')) {
   const $ = id => document.getElementById(id);
-  const fmt = ms => `${Math.ceil(ms / 60000)}分`;
-  // プール = ORRERY 19名＋入場済み（localStorage）＋（トグルONなら）ダミー
+  // プール = ORRERY 19名＋入場済み（localStorage）＋プレイヤー登録（localStorage）＋（トグルONなら）ダミー
   function buildPool() {
-    const entered = E.loadPool().map((e, i) => ({ ...e, name: e.displayName }));
+    const entered = E.loadPool().map(e => ({ ...e, name: e.displayName }));
     const meId = E.getMe();
     let me = entered.find(e => e.id === meId) ?? ORRERY[0];
     if (customImg) me = { ...me, img: customImg };
-    const others = [...ORRERY.filter(o => o.id !== me.id), ...entered.filter(e => e.id !== me.id), ...(E.demoOn() ? DUMMY.filter(d => d.id !== me.id) : [])];
+    const others = [...E.loadCustom(), ...ORRERY.filter(o => o.id !== me.id), ...entered.filter(e => e.id !== me.id), ...(E.demoOn() ? DUMMY.filter(d => d.id !== me.id) : [])];
     return { me, others };
   }
-  let picked = [], customImg = null, cardReady = Promise.resolve(), groupReady = Promise.resolve();
+  let customImg = null, cardReady = Promise.resolve(), groupReady = Promise.resolve();
+  let bgSel = GROUP.templates[0].src;
+  const selected = new Set();   // 選んだ相手の id（自分は含まない）
   const cardText = me => `${ENTRY_PHRASE}\n「${me.name}」のプロフィールカード`;
+  // 背景テンプレ（cute/cool）をサムネで選ぶ
+  function renderBgs() {
+    const box = $('bgs'); box.innerHTML = '';
+    for (const t of GROUP.templates) {
+      const l = document.createElement('label'); l.className = 'bgopt';
+      const r = document.createElement('input'); r.type = 'radio'; r.name = 'bg'; r.value = t.src; r.checked = t.src === bgSel;
+      r.onchange = () => { bgSel = t.src; render(); };
+      const im = document.createElement('img'); im.src = t.src; im.alt = t.label; im.width = 96; im.height = 96;
+      l.append(r, im, document.createElement('br'), t.label); box.append(l);
+    }
+  }
   function renderPool() {
     const { me, others } = buildPool();
-    $('me').textContent = me.orrery || me.dummy ? `${me.name}（初期プール・未入場）` : `${me.name}${me.hasCard ? ' ★優先' : ''}`;
+    $('me').textContent = me.orrery || me.dummy ? `${me.name}（初期プール・未入場）` : `${me.name}${me.hasCard ? ' ★' : ''}`;
+    const ids = new Set(others.map(o => o.id));
+    for (const id of [...selected]) if (!ids.has(id)) selected.delete(id);
     const ul = $('pool'); ul.innerHTML = '';
     for (const p of others) {
       const li = document.createElement('li');
-      li.textContent = `${p.name}${p.hasCard ? ' ★優先' : ''}${p.dummy ? '（デモ）' : ''}`;
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = selected.has(p.id);
+      cb.onchange = () => {
+        if (cb.checked && !E.withinLimit(selected.size + 1)) { cb.checked = false; $('limitMsg').textContent = `上限です：自分を含めて最大${E.MAX_TOTAL}名（相手は${E.MAX_OTHERS}人まで）`; return; }
+        cb.checked ? selected.add(p.id) : selected.delete(p.id); $('limitMsg').textContent = ''; render();
+      };
+      const lab = document.createElement('label'); lab.append(cb, ` ${p.name}${p.custom ? '（登録）' : ''}${p.dummy ? '（デモ）' : ''}`); li.append(lab);
       if (p.postUrl) { const a = document.createElement('a'); a.href = p.postUrl; a.target = '_blank'; a.rel = 'noopener'; a.textContent = ' ポスト'; li.append(a); }
-      if (!p.dummy) { const b = document.createElement('button'); b.textContent = '削除'; b.onclick = () => { E.removeEntry(p.id); renderPool(); }; li.append(' ', b); }
+      if (p.custom || p.postUrl) {
+        const b = document.createElement('button'); b.textContent = '削除';
+        b.onclick = () => { p.custom ? E.removeCustom(p.id) : E.removeEntry(p.id); selected.delete(p.id); renderPool(); render(); };
+        li.append(' ', b);
+      }
       ul.append(li);
     }
     cardReady = drawCard($('card'), me).catch(err => { console.error(err); });
     $('postCard').href = intentUrl(cardText(me));
-    const w = E.cooldownLeft(); $('cd').textContent = w ? `次の抽選まで あと${fmt(w)}` : '抽選できます';
-    $('shuffle').disabled = w > 0 && !$('demoFree').checked;
-    if ($('demoFree').checked) $('cd').textContent = 'デモモード：何度でも抽選できます';
   }
-  $('demoFree').onchange = renderPool;
   $('demoEnter').onclick = () => {
     const nm = ['あなた', 'ハル', 'ナギ', 'ツムギ'][Math.floor(Math.random() * 4)];
     const e = E.enter({ displayName: nm, postUrl: `https://x.com/empath_demo/status/${Date.now()}`, hasCard: true });
     E.setDemo(true); $('demo').checked = true;
-    $('demoMsg').textContent = `入場しました：${e.displayName}（デモ）→ 下の「ランダム接続」へ`; renderPool();
+    $('demoMsg').textContent = `入場しました：${e.displayName}（デモ）→ 下で背景・相手・文言を選んでください`; renderPool(); render();
   };
   $('avatarFile').onchange = e => { const f = e.target.files[0]; if (!f) return; customImg = URL.createObjectURL(f); renderPool(); render(); };
-  $("entry").href = intentUrl(ENTRY_PHRASE);
-  $('demo').checked = E.demoOn(); $('demo').onchange = e => { E.setDemo(e.target.checked); renderPool(); };
+  $('entry').href = intentUrl(ENTRY_PHRASE);
+  $('demo').checked = E.demoOn(); $('demo').onchange = e => { E.setDemo(e.target.checked); renderPool(); render(); };
   $('enter').onclick = () => {
     try {
       const e = E.enter({ displayName: $('name').value, postUrl: $('url').value, hasCard: $('hasCard').checked });
-      $('msg').textContent = `入場しました：${e.displayName}`; $('url').value = ''; renderPool();
+      $('msg').textContent = `入場しました：${e.displayName}`; $('url').value = ''; renderPool(); render();
     } catch (err) { $('msg').textContent = err.message; }
   };
-  $('shuffle').onclick = () => {
-    const { me, others } = buildPool();
-    const size = +$('size').value, free = $('demoFree').checked;
-    const opt = free ? { hist: [], save: false } : {};
-    if (size) opt.rand = (() => { let first = true; return () => first ? (first = false, (size - 1 - 0.5) / E.MAX_OTHERS) : Math.random(); })();
-    const r = E.draw(me.id, others, opt);
-    if (r.wait) { $('cd').textContent = `クールダウン中：あと${fmt(r.wait)}`; return; }
-    if (!r.picked.length) { $('cd').textContent = r.reason; return; }
-    picked = r.picked; renderPool(); render();
+  // プール登録：画像は 320px 角に縮小した JPEG dataURL で localStorage に保存
+  const toDataUrl = f => new Promise((ok, ng) => {
+    const u = URL.createObjectURL(f), im = new Image();
+    im.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 320; cover(c.getContext('2d'), im, 0, 0, 320, 320); URL.revokeObjectURL(u); ok(c.toDataURL('image/jpeg', 0.85)); };
+    im.onerror = () => ng(new Error('画像を読み込めませんでした')); im.src = u;
+  });
+  $('regAdd').onclick = async () => {
+    try {
+      const f = $('regFile').files[0]; if (!f) throw new Error('画像を選んでください');
+      const e = E.addCustom({ name: $('regName').value, img: await toDataUrl(f) });
+      $('regMsg').textContent = `登録しました：${e.name}`; $('regName').value = ''; $('regFile').value = ''; renderPool();
+    } catch (err) { $('regMsg').textContent = err.name === 'QuotaExceededError' ? '保存容量がいっぱいです（登録を削除してください）' : err.message; }
   };
-  $('event').value = DEFAULT_EVENT; $('event').oninput = render;
+  $('text').oninput = render;
+  $('compose').onclick = render;
   async function render() {
-    const people = [buildPool().me, ...picked];
-    $('count').textContent = `${people.length}人`;
+    const { me, others } = buildPool();
+    const picked = others.filter(o => selected.has(o.id));
+    const people = [me, ...picked];   // 自分は常に先頭
+    $('count').textContent = `${people.length}/${E.MAX_TOTAL}人`;
     $('picked').textContent = picked.map(p => p.name).join('・') || '—';
-    if (people.length < 2) { $('cap').textContent = '「ランダム接続」で相手を引いてください'; $('post').removeAttribute('href'); return; }
-    const ev = $('event').value.trim() || DEFAULT_EVENT;
-    groupReady = drawGroup($('group'), people, ev); await groupReady;
-    const t = caption(people.map(p => p.name), ev);
-    $('cap').textContent = t; $('post').href = intentUrl(t);
+    const text = $('text').value;
+    if (people.length < 2) { $('cap').textContent = 'プールから一緒に撮る相手を選んでください'; $('post').removeAttribute('href'); return; }
+    groupReady = drawGroup($('group'), people, { bg: bgSel, text }); await groupReady;
+    $('cap').textContent = text.trim() ? '' : '（文言は空です。下の欄に自由に書けます）';
+    $('post').href = intentUrl(text.trim());
   }
   // PNG保存: 描画完了を待ち、toBlob→ObjectURL、<a>をDOMに追加してクリック（Firefox/大容量dataURL対策）
   const dl = (id, name, ready, msgId) => async () => {
@@ -169,6 +213,5 @@ if (typeof document !== 'undefined' && document.getElementById('pool')) {
   };
   $('dlCard').onclick = dl('card', 'empath-card.png', () => cardReady, 'dlCardMsg');
   $('dlGroup').onclick = dl('group', 'empath-group.png', () => groupReady, 'dlGroupMsg');
-  setInterval(() => { const w = E.cooldownLeft(); if (w) $('cd').textContent = `次の抽選まで あと${fmt(w)}`; else if ($('shuffle').disabled) renderPool(); }, 30000);
-  renderPool(); render();
+  renderBgs(); renderPool(); render();
 }

@@ -1,8 +1,9 @@
 // プロトB：入場（ポストURL）・ローカルプール・抽選ルール
-export const KEYS = { pool: 'empath.pool.v1', me: 'empath.me.v1', hist: 'empath.drawHistory.v1', demo: 'empath.demoPool.v2' };
+export const KEYS = { custom: 'empath.customPool.v1', pool: 'empath.pool.v1', me: 'empath.me.v1', hist: 'empath.drawHistory.v1', demo: 'empath.demoPool.v2' };
 export const COOLDOWN_MS = 60 * 60 * 1000;   // 再抽選クールダウン60分
 export const RECENT_EXCLUDE = 3;              // 直近3回に出た相手は除外
-export const MAX_OTHERS = 4;                  // 自分＋最大4
+export const MAX_OTHERS = 7;                  // 自分を含む合計8名＝自分＋最大7
+export const MAX_TOTAL = MAX_OTHERS + 1;
 
 const STATUS_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/(\d{5,25})(?:[/?#].*)?$/;
 export function parsePostUrl(raw) {
@@ -59,3 +60,17 @@ export function draw(selfId, candidates, { now = Date.now(), rand = Math.random,
   if (save) set(KEYS.hist, [...hist, { at: now, ids: picked.map(p => p.id) }].slice(-20));
   return { picked };
 }
+
+// ---- プレイヤー登録プール（画像＋名前・この端末の localStorage のみ） ----
+export const loadCustom = () => get(KEYS.custom, []);
+export function addCustom({ name, img }, now = Date.now()) {
+  const n = String(name || '').trim();
+  if (!n) throw new Error('名前を入力してください');
+  if (!img) throw new Error('画像を選んでください');
+  const e = { id: 'custom:' + now.toString(36) + Math.random().toString(36).slice(2, 6), name: n, img, custom: true, addedAt: now };
+  set(KEYS.custom, [...loadCustom(), e]);  // 容量超過時は setItem が例外を投げる
+  return e;
+}
+export const removeCustom = id => set(KEYS.custom, loadCustom().filter(e => e.id !== id));
+/** 選択人数チェック：自分を含め合計 MAX_TOTAL 以下 */
+export const withinLimit = othersCount => othersCount + 1 <= MAX_TOTAL;
