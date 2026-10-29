@@ -52,7 +52,7 @@ async function drawCardTo(cv, p) {
   ctx.fillStyle = '#1c2340'; ctx.font = '600 52px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(`「${p.name}」`, n.x + n.w / 2, n.y + n.h / 2 + 2);
 }
-// 抽選ごとに背景3種からランダムに1枚（同じ背景の連続は避ける）
+// 抽選ごとに背景候補（9種）からランダムに1枚（同じ背景の連続は避ける）
 let lastBg = null;
 export function pickGroupBg(list = GROUP.bgs) {
   const pool = list.length > 1 ? list.filter(b => b !== lastBg) : list;

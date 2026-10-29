@@ -8,7 +8,14 @@ export const CARD = {
 export const GROUP = {
   bg: 'art/group-photo-5.jpg',
   // 集合写真の背景候補（アリス納品・抽選ごとにランダム）。写真窓は空/光/桜のみ
-  bgs: ['art/group-bg-01-sakura-sky.jpg', 'art/group-bg-02-golden-hour.jpg', 'art/group-bg-03-petal-storm.jpg'],
+  bgs: ['art/group-bg-01-sakura-sky.jpg', 'art/group-bg-02-golden-hour.jpg', 'art/group-bg-03-petal-storm.jpg',
+    // 集合合成テンプレ6枚（cute3＋cool3）
+    'art/group-tpl-cute-01-sakura.jpg',
+    'art/group-tpl-cute-02-dusk-road.jpg',
+    'art/group-tpl-cute-03-flower-field.jpg',
+    'art/group-tpl-cool-01-neon-rain.jpg',
+    'art/group-tpl-cool-02-rooftop-stars.jpg',
+    'art/group-tpl-cool-03-backlit-sea.jpg'],
   photo:   { x: 70, y: 138, w: 885, h: 700, r: 18 },   // 写真窓（ここを塗り直す）
   caption: { x: 52, y: 848, w: 920, h: 136, r: 18 },          // キャプション＋タグ帯
   // 人数ごとの円スロット（cx, cy, r）。見本の5人の顔位置に準拠
