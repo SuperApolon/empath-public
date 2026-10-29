@@ -17,9 +17,8 @@ const DUMMY = [
   { name: 'ソラ', img: 'art/avatar-diversity-04-black-hair-masc.jpg' },
   { name: 'ユイ', img: 'art/avatar-diversity-03-lavender.jpg' },
   { name: 'ハルカ', img: 'art/profile-avatar.jpg' },
-  { name: 'アオ', color: '#7fa6c9' },
+  { name: 'アオ' }, // img なし→テンプレ割り当て
 ].map((p, i) => ({ ...p, id: 'dummy:' + i, dummy: true }));
-const COLORS = ['#7fa6c9', '#c99a7f', '#9ac97f', '#b07fc9', '#c97f9e'];
 export function caption(names, ev = DEFAULT_EVENT) {
   const others = names.slice(1);
   if (others.length === 0) return '';
@@ -32,12 +31,17 @@ function cover(ctx, img, x, y, w, h) {
   const s = Math.max(w / img.width, h / img.height), iw = img.width * s, ih = img.height * s;
   ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih);
 }
+// img なし時のフォールバック：頭文字グラデは廃止し、人物テンプレ6枚から1枚割り当て。
+// 方針：p.gender が 'f'/'m' ならその性別の3枚から、未指定なら6枚全体から、名前ハッシュ(FNV-1a)で選ぶ
+// （同じ名前なら常に同じ画像で安定。名前から性別は推定しない）。
+const AVATAR_TPL = { f: [1, 2, 3].map(i => `art/avatar-templates/avatar-f-0${i}.jpg`), m: [1, 2, 3].map(i => `art/avatar-templates/avatar-m-0${i}.jpg`) };
+function nameHash(s) { let h = 0x811c9dc5; for (const ch of String(s)) { h ^= ch.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h; }
+export function fallbackAvatar(p) {
+  const list = AVATAR_TPL[p.gender] ?? [...AVATAR_TPL.f, ...AVATAR_TPL.m];
+  return list[nameHash(p.name ?? p.id ?? '') % list.length];
+}
 async function drawAvatar(ctx, p, x, y, w, h) {
-  if (p.img) return cover(ctx, await load(p.img), x, y, w, h);
-  const g = ctx.createLinearGradient(x, y, x, y + h); g.addColorStop(0, '#fff'); g.addColorStop(1, p.color);
-  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = 'rgba(30,40,80,.75)'; ctx.font = `600 ${h * .38}px sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.name[0], x + w / 2, y + h / 2);
+  return cover(ctx, await load(p.img || fallbackAvatar(p)), x, y, w, h);
 }
 // 非同期描画中に別描画が走ると表示キャンバスが途中状態になる→オフスクリーンで描いてから一括反映
 function commit(cv, off) { cv.width = cv.height = CANVAS; cv.getContext('2d').drawImage(off, 0, 0); }
@@ -85,7 +89,7 @@ if (typeof document !== 'undefined' && document.getElementById('pool')) {
   const fmt = ms => `${Math.ceil(ms / 60000)}分`;
   // プール = ORRERY 19名＋入場済み（localStorage）＋（トグルONなら）ダミー
   function buildPool() {
-    const entered = E.loadPool().map((e, i) => ({ ...e, name: e.displayName, color: COLORS[i % COLORS.length] }));
+    const entered = E.loadPool().map((e, i) => ({ ...e, name: e.displayName }));
     const meId = E.getMe();
     let me = entered.find(e => e.id === meId) ?? ORRERY[0];
     if (customImg) me = { ...me, img: customImg };
